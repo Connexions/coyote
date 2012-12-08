@@ -95,6 +95,44 @@ section to be a valid pipeline it **must** define a value for the
         shell!cp module.pdf {settings.deposit_location}/
     deposit_location = /mnt/www
 
+Installation and Tests
+----------------------
+
+Installation
+~~~~~~~~~~~~
+
+This code uses `setuptools` to distribute itself. To install, use of
+the following methods::
+
+    $ python setup.py install
+
+The following will to obtain released versions::
+
+    $ easy_install rbit
+
+Using `pip` you can install a released version, like so::
+
+    $ pip install rbit
+
+Or, the development version by pointing pip at the checked out
+directory, like so::
+
+    $ pip install $CHECKOUT_LOCATION/rbit/
+
+Testing
+~~~~~~~
+
+The only way to run the tests for this distribution are to unpack the
+distribution contents manually. We purposely do not install the tests
+with the package. If you were to run the tests on a production
+system, you could bork the live data in your message queue.
+
+To run the tests, change into the distribution root and run the
+`unittest` discovery command on from there::
+
+    $ cd $DISTRIBUTION_ROOT
+    $ python -m unittest discover
+
 Reverse Engineering PyBit Client
 --------------------------------
 

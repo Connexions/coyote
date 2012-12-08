@@ -121,3 +121,28 @@ future. The PyBit client implemenation uses this status in one
 place. When a build fails due to missing dependencies, the client sets
 the status to blocked. As a result the job gets republished/pushed
 back onto the queue.
+
+PyBit Queue Design
+~~~~~~~~~~~~~~~~~~
+
+The queues used by PyBit are named queues with named routes. It looks
+to me that the contents that the queue and the route have the same
+names. This doesn't really help anything and in fact is a bit
+redundant. I believe they have taken this approach for one of two
+reasons:
+
+1. Creating a named queue from the PyBit web front-end allows for the
+   job to be sent to a queue no matter the status of the queues,
+   because without setting up the queus in the web front-end there
+   would be nowhere to send the job.
+2. They may have started with named queues and never got the chance to
+   remove the implementation.
+
+I think the best approach in this situation would be to setup a named
+queue from the PyBit web front-end that recieves all messages. Then
+have a default listener that watches for new build-clients. Once it
+sees a new build client it cycles through the queue, republishing
+queued items that have been put in the default queue.
+
+This approach could be taken a step further to stop and start workers
+based on work available and the usage of slave boxes.

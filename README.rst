@@ -67,7 +67,7 @@ definitions. For example::
     polling_time = 60
     architecture = any
     distribution = cnx
-    package_format = princexml
+    format = princexml
     # The `suites` is a list of suites separated by commas (,).
     suites = latex, princexml
     
@@ -77,11 +77,18 @@ definitions. For example::
     user = guest
     password = guest
 
+At this time, pipelines are named by distribution, architecture,
+suite and format (e.g. cnx_any_princexml_epub). These pipeline names
+directly correspond with the queue names. This is primarily because I
+don't know of a better way to name them at this time.
+
+.. note:: The way naming of pipelines will likely change in some iteration.
+
 Each pipeline can have it's own set of configuration values. For a
 section to be a valid pipeline it **must** define a value for the
 `pipeline` attribute in the pipeline's section. For example::
 
-    [pdf]
+    [openstax_any_latex_pdf]
     pipeline:
         python!rbit.ext.pdf:gimmie_info
         python!Products.RhaptosPrint.printing:main

@@ -87,3 +87,30 @@ section to be a valid pipeline it **must** define a value for the
         python!Products.RhaptosPrint.printing:main
         shell!cp module.pdf {settings.deposit_location}/
     deposit_location = /mnt/www
+
+Reverse Engineering PyBit Client
+--------------------------------
+
+The implementation of PyBit client is specific to the Debian package
+build process. The code is setup to use a number of state handlers,
+which are triggered in (I think) a specific order. The handlers are
+small chuncks of logic that can be analyzed after run completion,
+which enables the client to update the status of the build in the
+PyBit web front-end.
+
+PyBit Statuses
+~~~~~~~~~~~~~~
+
+The implementation of statuses in PyBit seems incomplete at this
+time. The code that is used in PyBit Client has a static set of
+statuses to pull from. At the same time, the web front-end allows for
+the creation and deletion of statuses. This makes sense, but could
+result in odd behavior if the statuses are removed from the
+front-end. However, chances are that it would only disable job status
+filtering results.
+
+The 'Blocked' status is something we will likely not use in the near
+future. The PyBit client implemenation uses this status in one
+place. When a build fails due to missing dependencies, the client sets
+the status to blocked. As a result the job gets republished/pushed
+back onto the queue.

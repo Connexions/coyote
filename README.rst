@@ -95,6 +95,41 @@ section to be a valid pipeline it **must** define a value for the
         shell!cp module.pdf {settings.deposit_location}/
     deposit_location = /mnt/www
 
+Pipelines
+---------
+
+Pipelines are a sequencial array of one or more functions that do
+work. These functions are given access to the client, a status
+callback function and the locally defined pipeline settings. The
+callback function can be used one or more times during the
+process. It's job is to update the status of the job as work is being
+done. The status displayed in the PyBit web front-end. (How the
+callback gets information there is to be determined at implementation
+time.)
+
+Here is a very simple hello world example of a pipeline function.
+::
+
+    def hello(client, set_status, settings):
+        status_message = "Starting job at {0}".format(datetime.now())
+        set_status('Building', status_message)
+
+        # Do some work
+        try:
+            print("Hello {0}!".format(settings['name']))
+        except KeyError, err:
+            set_status('Failed', err)
+            raise err
+
+        status_message = "Completed job at {0}".format(datetime.now())
+        set_status('Done', status_message)
+
+In this example, we set the status twice. We set the status during the
+start of the job. Then we may or maynot set the status to failed due
+to a missing setting. (This isn't a very realistic failure, because
+you'd really want the client to catch the exception.) And finally, if
+the job is successful, set the status to done.
+
 Installation and Tests
 ----------------------
 

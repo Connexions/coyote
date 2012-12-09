@@ -71,7 +71,7 @@ definitions. For example::
     # The `suites` is a list of suites separated by commas (,).
     suites = latex, princexml
     
-    [mq]
+    [amqp]
     host = localhost
     port = 5432
     user = guest

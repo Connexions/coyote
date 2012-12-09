@@ -5,14 +5,54 @@ Pybit client implemenation for Rhaptos workers.
 Author: Michael Mulich
 Copyright (c) 2012 Rice University
 
-Parts of this code are derived from the PyBit client implementation at
+Parts of the client code are derived from the PyBit client implementation at
 https://github.com/nicholasdavidson/pybit licensed under GPL2.1.
 
 This software is subject to the provisions of the GNU Lesser General
 Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
 """
+from ConfigParser import ConfigParser
+
 import pika
 import pybit
+
+
+class Config(object):
+    """A configuration class can hold information about the client, message
+    queue, and pipeline settings.
+
+    """
+
+    def __init__(self, rbit_settings, amqp_settings, pipelines={}):
+        self.rbit = rbit_settings
+        self.amqp = amqp_settings
+        self._pipelines = pipelines
+
+    @classmethod
+    def from_file(cls, ini_file):
+        """Used to initialize the configuration object from an INI file."""
+        config = ConfigParser()
+        with open(ini_file, 'r') as f:
+            config.readfp(f)
+
+        def config_to_dict(c):
+            result = {}
+            for section in c.sections():
+                result[section] = dict(c.items(section))
+            return result
+
+        all_settings = config_to_dict(config)
+        rbit_settings = all_settings['rbit']
+        amqp_settings = all_settings['amqp']
+        del all_settings['rbit']
+        del all_settings['amqp']
+        pipelines = all_settings
+        return cls(rbit_settings, amqp_settings, pipelines)
+
+    @property
+    def rbit_suites(self):
+        """Parse the configured suites to a list."""
+        return [s.strip() for s in self.rbit['suites'].split(',')]
 
 
 class Client(object):
@@ -31,7 +71,8 @@ class Client(object):
         #   populate the queue names.
         self._queue_list = dict()
         for suite in suites:
-            name = pybit.get_build_queue_name(self.distribution, self.arch,
+            name = pybit.get_build_queue_name(self.distribution,
+                                              self.architecture,
                                               suite, self.format)
             self._queue_list[suite] = name
 
@@ -41,6 +82,12 @@ class Client(object):
         #   work to be done.
         self._connection = None
         self._channel = None
+
+    @classmethod
+    def from_config(cls, config):
+        """Initialize the class using an `rbit.Config` instance."""
+        return cls(config.rbit['architecture'], config.rbit['distribution'],
+                   config.rbit['format'], config.rbit_suites, config.amqp)
 
     def act(self):
         """Rolls through the pipeline"""

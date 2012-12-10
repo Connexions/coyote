@@ -11,6 +11,7 @@ https://github.com/nicholasdavidson/pybit licensed under GPL2.1.
 This software is subject to the provisions of the GNU Lesser General
 Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
 """
+import logging
 from ConfigParser import ConfigParser
 
 import pika
@@ -71,10 +72,13 @@ class Client(object):
         #   populate the queue names.
         self._queue_list = dict()
         for suite in suites:
-            name = pybit.get_build_queue_name(self.distribution,
-                                              self.architecture,
-                                              suite, self.format)
-            self._queue_list[suite] = name
+            queue = pybit.get_build_queue_name(self.distribution,
+                                               self.architecture,
+                                               suite, self.format)
+            route = pybit.get_build_queue_name(self.distribution,
+                                               self.architecture,
+                                               suite, self.format)
+            self._queue_list[suite] = {'queue': queue, 'route': route}
 
         self._amqp_info = amqp_info
         # Message queue storage attributes. These values get set when
@@ -93,8 +97,8 @@ class Client(object):
         """Rolls through the pipeline"""
         msg = None
         if self._channel is not None:
-            for suite in self._listen_list:
-                queue = self._listen_list[suite]['queue']
+            for suite in self._queue_list:
+                queue = self._queue_list[suite]['queue']
                 msg = self._channel.basic_get(queue=queue)
                 if msg:
                     break
@@ -133,14 +137,14 @@ class Client(object):
         connection_parameters = pika.ConnectionParameters(
                 host, port, virtual_host, credentials)
 
-        self._connnnection = pika.BlockingConnection(connection_parameters)
+        self._connection = pika.BlockingConnection(connection_parameters)
         self._channel = self._connection.channel()
 
         for suite, info in self._queue_list.iteritems():
             queue = info['queue']
             route = info['route']
             logging.debug("Creating queue with name:" + queue)
-            self._channel.queue_declare(queue=info,
+            self._channel.queue_declare(queue=queue,
                                         durable=True, exclusive=False,
                                         auto_delete=False)
             self._channel.queue_bind(exchange=pybit.exchange_name,

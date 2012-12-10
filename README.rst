@@ -73,7 +73,7 @@ definitions. For example::
     
     [amqp]
     host = localhost
-    port = 5432
+    port = 5672
     user = guest
     password = guest
 
@@ -110,9 +110,10 @@ time.)
 Here is a very simple hello world example of a pipeline function.
 ::
 
-    def hello(client, set_status, settings):
+    def hello(message, set_status, settings={}):
         status_message = "Starting job at {0}".format(datetime.now())
         set_status('Building', status_message)
+        build_request = jsonpickle.decode(message.body)
 
         # Do some work
         try:
@@ -120,6 +121,8 @@ Here is a very simple hello world example of a pipeline function.
         except KeyError, err:
             set_status('Failed', err)
             raise err
+
+        print("Building {0}".format(build_request.get_package()))
 
         status_message = "Completed job at {0}".format(datetime.now())
         set_status('Done', status_message)
@@ -129,6 +132,11 @@ start of the job. Then we may or maynot set the status to failed due
 to a missing setting. (This isn't a very realistic failure, because
 you'd really want the client to catch the exception.) And finally, if
 the job is successful, set the status to done.
+
+Why decode the message in the job? Why not pass in the BuildRequest
+object instead of the raw message? Sending in the raw data is better
+because if we later want to change the interface, we don't have to
+change the variable naming and/or behavior.
 
 Installation and Tests
 ----------------------

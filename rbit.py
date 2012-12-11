@@ -18,6 +18,37 @@ import pika
 import pybit
 
 
+def get_pipeline_items(item_list):
+    """Find suitable importers/handlers for the various pipeline items.
+    Return a list of callables for the given items.
+
+    Items are a single string that has been formatted to display
+    its processor type and other information that will be passed to the
+    processor of said type. For example::
+
+        python!rbitext.decode_build_request:main
+
+    In this line, we are using the python processor type. In this situation,
+    the python processor parses the information about the ``!`` exclamation
+    to determine where the logic is located.
+
+    The processor type defines what it will do with the contents after the
+    exclamation.
+
+    """
+    for item in item_list:
+        processor_type, info = item.split('!')
+        # FIXME Ideally the processors will be defined in some kind of
+        #       registry/configuration.
+        #       For now the only supported processor is `python`.
+        if processor_type != 'python':
+            raise NotImplementedError
+        module_path, func = info.split(':')
+        module = __import__(module_path)
+        yield getattr(module, func)
+    raise StopIteration
+
+
 class Config(object):
     """A configuration class can hold information about the client, message
     queue, and pipeline settings.
@@ -48,6 +79,10 @@ class Config(object):
         del all_settings['rbit']
         del all_settings['amqp']
         pipelines = all_settings
+        for info in pipelines.values():
+            info['pipeline'] = [x.strip()
+                                for x in info['pipeline'].split('\n')
+                                if x.strip()]
         return cls(rbit_settings, amqp_settings, pipelines)
 
     @property
@@ -62,7 +97,8 @@ class Client(object):
 
     """
 
-    def __init__(self, architecture, distribution, format, suites, amqp_info):
+    def __init__(self, architecture, distribution, format, suites,
+                 amqp_info, pipelines={}):
         self.architecture = architecture
         self.distribution = distribution
         self.format = format
@@ -87,23 +123,39 @@ class Client(object):
         self._connection = None
         self._channel = None
 
+        # Make note of the pipelines...
+        self._pipelines = pipelines
+
     @classmethod
     def from_config(cls, config):
         """Initialize the class using an `rbit.Config` instance."""
         return cls(config.rbit['architecture'], config.rbit['distribution'],
-                   config.rbit['format'], config.rbit_suites, config.amqp)
+                   config.rbit['format'], config.rbit_suites, config.amqp,
+                   # XXX Just making this work. Ideally the config
+                   #     object would spit out a list of Pipeline objects.
+                   config._pipelines)
 
     def act(self):
         """Rolls through the pipeline"""
-        msg = None
+        method, header, msg_body = (None, None, None,)
+        current_queue = None
+        set_status = lambda status, msg: 1 + 1  # XXX
+
         if self._channel is not None:
             for suite in self._queue_list:
                 queue = self._queue_list[suite]['queue']
-                msg = self._channel.basic_get(queue=queue)
-                if msg:
+                method, header, msg_body = self._channel.basic_get(queue=queue)
+                if msg_body:
+                    current_queue = queue
                     break
-            if msg is not None :
-                logging.info("DO WORK HERE...")
+            if msg_body is not None:
+                pipeline_name = current_queue
+                # XXX This will need refactored. To much raw data
+                #     work.
+                pipeline_settings = self._pipelines[current_queue]
+                for func in get_pipeline_items(pipeline_settings['pipeline']):
+                    func(msg_body, set_status, pipeline_settings)
+
         # FIXME Currently, the additional commands entry that comes
         #       in the job/build request is not handled here.
 

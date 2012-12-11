@@ -9,6 +9,11 @@ Thank you for you co-opperation. =)
 import os
 import unittest
 
+import mock
+
+import jsonpickle
+import pybit
+
 
 here = os.path.abspath(os.path.dirname(__file__))
 TESTING_CONFIG = os.path.join(here, 'testing.ini')
@@ -18,6 +23,8 @@ def test_pipeline_info_getter(message, set_status, settings):
     """Get some info and stick it in the settings."""
     # Push the current location into the settings for a simple check
     set_status('Building', "Gathering build information.")
+    build_request = jsonpickle.decode(message)
+    settings['package_url'] = None
     settings['here'] = here
 
 def test_pipeline_process_info(message, set_status, settings):
@@ -50,7 +57,7 @@ class ClientConfigurationTest(unittest.TestCase):
         self.assertTrue(isinstance(client, Client))
 
 
-class ClientBaseFunctionalityTest(unittest.TestCase):
+class XXXClientBaseFunctionalityTest(unittest.TestCase):
 
     # XXX This is a test that can be removed. It is a preliminary test
     #     to verify a connection can be made.
@@ -63,3 +70,20 @@ class ClientBaseFunctionalityTest(unittest.TestCase):
         with client as connected_client:
             connected_client.act()
         # If the connection is good this test passes.
+
+
+class ClientTest(unittest.TestCase):
+
+    def _make_config(self):
+        from rbit import Config
+        return Config.from_file(TESTING_CONFIG)
+
+    def test_act_on_a_job(self):
+        # Create a job, act on it and check for the intented results.
+
+        from rbit import Client
+        client = Client.from_config(self._make_config())
+        # Patch the client's connection code.
+        client._channel = mock.MagicMock()
+        client._channel.basic_get.return_value = (None, None, '{"py/object": "pybit.models.BuildRequest", "commands": "", "timestamp": null, "job": {"py/object": "pybit.models.Job", "packageinstance": {"py/object": "pybit.models.PackageInstance", "format": {"py/object": "pybit.models.Format", "id": 1, "name": "completezip"}, "package": {"py/object": "pybit.models.Package", "version": "1.2", "id": 1, "name": "m9003"}, "master": false, "suite": {"py/object": "pybit.models.Suite", "id": 1, "name": "latex"}, "distribution": {"py/object": "pybit.models.Dist", "id": 3, "name": "openstax"}, "arch": {"py/object": "pybit.models.Arch", "id": 1, "name": "any"}, "id": 1}, "id": 1, "buildclient": null}, "transport": {"py/object": "pybit.models.Transport", "uri": "http://cnx.org/content/", "id": null, "vcs_id": "latest", "method": "http"}, "web_host": "localhost:8080"}',)
+        client.act()

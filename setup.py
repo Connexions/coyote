@@ -5,6 +5,15 @@ from setuptools import setup, find_packages
 here = os.path.abspath(os.path.dirname(__file__))
 README = os.path.join(here, 'README.rst')
 
+install_requirements = [
+    'pybit',
+    'pika',
+    'jsonpickle',
+    ]
+test_requirements = [
+    'mock',
+    ]
+
 setup(
     name='rbit',
     version='1.0',
@@ -16,10 +25,10 @@ setup(
     license='GPL2',  # See also LICENSE.txt
     packages=find_packages(),
     include_package_data=True,
-    install_requires=[
-        'pybit',
-        'pika',
-        ],
+    install_requires=install_requirements,
+    extras_require={
+        'tests': test_requirements,
+        },
     entry_points = """\
     """,
     )

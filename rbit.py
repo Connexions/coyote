@@ -22,11 +22,11 @@ import requests
 import pybit
 
 
-def get_pipeline_items(item_list):
-    """Find suitable importers/handlers for the various pipeline items.
-    Return a list of callables for the given items.
+def parse_runner_line(line):
+    """Find suitable importers/handlers for the runner line.
+    Return a callables for the given line.
 
-    Items are a single string that has been formatted to display
+    The line is a single string that has been formatted to display
     its processor type and other information that will be passed to the
     processor of said type. For example::
 
@@ -40,29 +40,27 @@ def get_pipeline_items(item_list):
     exclamation.
 
     """
-    for item in item_list:
-        processor_type, info = item.split('!')
-        # FIXME Ideally the processors will be defined in some kind of
-        #       registry/configuration.
-        #       For now the only supported processor is `python`.
-        if processor_type != 'python':
-            raise NotImplementedError
-        module_path, func = info.split(':')
-        module = __import__(module_path)
-        yield getattr(module, func)
-    raise StopIteration
+    processor_type, info = line.split('!')
+    # FIXME Ideally the processors will be defined in some kind of
+    #       registry/configuration.
+    #       For now the only supported processor is `python`.
+    if processor_type != 'python':
+        raise NotImplementedError
+    module_path, func = info.split(':')
+    module = __import__(module_path)
+    return getattr(module, func)
 
 
 class Config(object):
     """A configuration class can hold information about the client, message
-    queue, and pipeline settings.
+    queue, and runner settings.
 
     """
 
-    def __init__(self, rbit_settings, amqp_settings, pipelines={}):
+    def __init__(self, rbit_settings, amqp_settings, runners={}):
         self.rbit = rbit_settings
         self.amqp = amqp_settings
-        self._pipelines = pipelines
+        self._runners = runners
 
     @classmethod
     def from_file(cls, ini_file):
@@ -85,12 +83,8 @@ class Config(object):
         amqp_settings = all_settings['amqp']
         del all_settings['rbit']
         del all_settings['amqp']
-        pipelines = all_settings
-        for info in pipelines.values():
-            info['pipeline'] = [x.strip()
-                                for x in info['pipeline'].split('\n')
-                                if x.strip()]
-        return cls(rbit_settings, amqp_settings, pipelines)
+        runners = all_settings
+        return cls(rbit_settings, amqp_settings, runners)
 
     @property
     def rbit_suites(self):
@@ -105,7 +99,7 @@ class Client(object):
     """
 
     def __init__(self, architecture, distribution, format, suites,
-                 amqp_info, pipelines={}):
+                 amqp_info, runner_settings={}):
         self.architecture = architecture
         self.distribution = distribution
         self.format = format
@@ -130,8 +124,7 @@ class Client(object):
         self._connection = None
         self._channel = None
 
-        # Make note of the pipelines...
-        self._pipelines = pipelines
+        self._runner_settings = runner_settings
 
     @classmethod
     def from_config(cls, config):
@@ -140,7 +133,7 @@ class Client(object):
                    config.rbit['format'], config.rbit_suites, config.amqp,
                    # XXX Just making this work. Ideally the config
                    #     object would spit out a list of Pipeline objects.
-                   config._pipelines)
+                   config._runners)
 
     def _set_status(self, status, build_request):
         payload = {'status': status}
@@ -172,17 +165,14 @@ class Client(object):
                     current_queue = queue
                     break
             if msg_body is not None:
-                pipeline_name = current_queue
-                # XXX This will need refactored. To much raw data
-                #     work.
-                pipeline_settings = self._pipelines[current_queue]
-                for func in get_pipeline_items(pipeline_settings['pipeline']):
-                    try:
-                        func(msg_body, set_status, pipeline_settings)
-                    except Exception, err:
-                        # Grab all Exceptions
-                        set_status('Failed', err)
-                        break
+                # XXX This will need refactored. To much raw data work.
+                settings = self._runner_settings[current_queue]
+                runner = parse_runner_line(settings['runner'])
+                try:
+                    runner(msg_body, set_status, settings)
+                except Exception, err:
+                    # Grab all Exceptions
+                    set_status('Failed', err)
         # FIXME Currently, the additional commands entry that comes
         #       in the job/build request is not handled here.
 

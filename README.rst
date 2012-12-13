@@ -22,18 +22,14 @@ system/user to execute the jobs in the queuing system.
 
 The second part is the job logic. This differs based on what kind of
 work needs to be done. However, it does adhere to a set interface. The
-logic is configured via a pipeline (python list). The pipeline can
-consist of one or more executable tasks. A state object is given to
-each member of the pipeline, which can be used to pass along work done
-in the previous pipeline step. Upon completion of the pipeline, the
-state object can be used to infer complete or partial success.
+logic is configured via a job runner or simply runner(python function).
 
 The third and final part of the client code allows for the client user
 or system admin to set up the client using a (set of) configuration
 file(s). The configuration contains information about PyBit
 Web application (This will be removed at some point, because we don't want
 the client code to depend on the web front-end.), the message queue,
-and the various pipelines.
+and the job runner.
 
 Usage
 -----
@@ -46,7 +42,7 @@ In this case we are telling the `rbit` interface to start in debug
 mode, which allows for more information to be printed to standard
 out. The single file argument is the configuration file containing
 general information about the message queue as well as the configured
-pipelines.
+runners.
 
 The `rbit` interface will happily run in foreground more until you
 decide to stop the process using `Ctrl+c`.
@@ -55,9 +51,9 @@ Configuration
 -------------
 
 The configuration is stored in an ini format for simplicity. There are
-**two required sections**. They are `rbit` and `mq`,
+**two required sections**. They are `rbit` and `amqp`,
 which contain settings for the client itself and the message queue,
-respectfully. All other sections are/will be considered pipeline
+respectfully. All other sections are/will be considered job runner
 definitions. For example::
 
     [rbit]
@@ -77,37 +73,46 @@ definitions. For example::
     user = guest
     password = guest
 
-At this time, pipelines are named by distribution, architecture,
-suite and format (e.g. cnx_any_princexml_epub). These pipeline names
+At this time, job runner(s) are named by distribution, architecture,
+suite and format (e.g. cnx_any_princexml_epub). These runner names
 directly correspond with the queue names. This is primarily because I
 don't know of a better way to name them at this time.
 
-.. note:: The way naming of pipelines will likely change in some iteration.
+.. note:: The way naming of runners will likely change in some iteration.
 
-Each pipeline can have it's own set of configuration values. For a
+Each job runner can have it's own set of configuration values. For a
 section to be a valid pipeline it **must** define a value for the
-`pipeline` attribute in the pipeline's section. For example::
+`runner` attribute in the pipeline's section. For example::
 
     [openstax_any_latex_pdf]
-    pipeline:
-        python!rbit.ext.pdf:gimmie_info
-        python!Products.RhaptosPrint.printing:main
-        shell!cp module.pdf {settings.deposit_location}/
+    runner = python!Products.RhaptosPrint.printing:main
     deposit_location = /mnt/www
 
-Pipelines
----------
+Job Runner
+----------
 
-Pipelines are a sequencial array of one or more functions that do
-work. These functions are given access to the client, a status
-callback function and the locally defined pipeline settings. The
-callback function can be used one or more times during the
-process. It's job is to update the status of the job as work is being
-done. The status displayed in the PyBit web front-end. (How the
-callback gets information there is to be determined at implementation
-time.)
+A job runner is a piece of logic used to carry out the work
+The runner is defined in configuration by the processor, which calls
+the actually working logic or is the working logic itself. For
+example, you might configure a shell process like this::
 
-Here is a very simple hello world example of a pipeline function.
+    [cnx_desktop_princexml_epub]
+    runner = shell!%ID.pdf
+
+Or a Python runner like::
+
+    [cnx_any_latex_pdf]
+    runner = python!rbitext.rhaptos_print:make_print
+
+The Python processor calls a function. The function is given access to
+the message body, a status callback function and the locally defined
+configuration settings. The status callback function can be used one
+or more times during the process. It is the job of the logic to update
+the status of the job as work is being done. However, if an unknown
+exception occures, the client will report the failure iteself.
+
+Here is a very simple hello world example of job runner function in
+the ``my_worker.py`` module.
 ::
 
     def hello(message, set_status, settings={}):
@@ -120,23 +125,32 @@ Here is a very simple hello world example of a pipeline function.
             print("Hello {0}!".format(settings['name']))
         except KeyError, err:
             set_status('Failed', err)
-            raise err
+            return
 
         print("Building {0}".format(build_request.get_package()))
 
         status_message = "Completed job at {0}".format(datetime.now())
         set_status('Done', status_message)
 
+The configuration for this might look like this::
+
+    [ccap_any_latex_completezip]
+    runner = python!my_worker:hello
+    name = You
+
 In this example, we set the status twice. We set the status during the
 start of the job. Then we may or maynot set the status to failed due
-to a missing setting. (This isn't a very realistic failure, because
-you'd really want the client to catch the exception.) And finally, if
-the job is successful, set the status to done.
+to a missing setting. And finally, if the job is successful, set the
+status to done.
 
 Why decode the message in the job? Why not pass in the BuildRequest
 object instead of the raw message? Sending in the raw data is better
 because if we later want to change the interface, we don't have to
 change the variable naming and/or behavior.
+
+The statuses used are those used in the PyBit web front-end. (How the
+callback gets information there is to be determined at implementation
+time.)
 
 Installation and Tests
 ----------------------

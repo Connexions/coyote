@@ -11,7 +11,9 @@ https://github.com/nicholasdavidson/pybit licensed under GPL2.1.
 This software is subject to the provisions of the GNU Lesser General
 Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
 """
+import time
 import logging
+import argparse
 from ConfigParser import ConfigParser
 
 import jsonpickle
@@ -66,8 +68,11 @@ class Config(object):
     def from_file(cls, ini_file):
         """Used to initialize the configuration object from an INI file."""
         config = ConfigParser()
-        with open(ini_file, 'r') as f:
-            config.readfp(f)
+        if hasattr(ini_file, 'read'):
+            config.readfp(ini_file)
+        else:
+            with open(ini_file, 'r') as f:
+                config.readfp(f)
 
         def config_to_dict(c):
             result = {}
@@ -244,3 +249,27 @@ class Client(object):
 
     def __exit__(self, type, value, traceback):
         self.disconnect()
+
+
+def main(argv=None):
+    """Command line utility"""
+    parser = argparse.ArgumentParser(description="PyBit builder for rhaptos")
+    parser.add_argument('--poll-time', type=int, default=60,
+                        help="time to poll between idle periods")
+    parser.add_argument('config', type=argparse.FileType('r'),
+                        help="INI configuration file")
+    args = parser.parse_args(argv)
+
+    # Load the configuration
+    config = Config.from_file(args.config)
+    # Create the client
+    client = Client.from_config(config)
+
+    # Roll through the client at a time interval.
+    while True:
+        time.sleep(args.poll_time)
+        client.act()
+
+
+if __name__ == '__main__':
+    main()

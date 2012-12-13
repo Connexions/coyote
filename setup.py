@@ -30,5 +30,7 @@ setup(
         'tests': test_requirements,
         },
     entry_points = """\
+    [console_scripts]
+    rbit = rbit:main
     """,
     )

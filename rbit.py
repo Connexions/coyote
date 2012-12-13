@@ -14,7 +14,9 @@ Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
 import logging
 from ConfigParser import ConfigParser
 
+import jsonpickle
 import pika
+import requests
 import pybit
 
 
@@ -135,11 +137,27 @@ class Client(object):
                    #     object would spit out a list of Pipeline objects.
                    config._pipelines)
 
+    def _set_status(self, status, build_request):
+        payload = {'status': status}
+        job_status_url = "http://{0}/job/{1}".format(build_request.web_host,
+                                                     build_request.get_job_id())
+        try:
+            # XXX Hard coded PyBit credentials.
+            requests.put(job_status_url, payload,
+                         auth=requests.auth.HTTPBasicAuth('admin', 'pass'))
+        except requests.exceptions.ConnectionError:
+            pass
+        else:
+            logging.debug("Couldn't find status or current_request")
+
     def act(self):
         """Rolls through the pipeline"""
         method, header, msg_body = (None, None, None,)
         current_queue = None
-        set_status = lambda status, msg: 1 + 1  # XXX
+
+        def set_status(status, message=''):
+            build_request = jsonpickle.decode(msg_body)
+            self._set_status(status, build_request)
 
         if self._channel is not None:
             for suite in self._queue_list:
@@ -154,8 +172,12 @@ class Client(object):
                 #     work.
                 pipeline_settings = self._pipelines[current_queue]
                 for func in get_pipeline_items(pipeline_settings['pipeline']):
-                    func(msg_body, set_status, pipeline_settings)
-
+                    try:
+                        func(msg_body, set_status, pipeline_settings)
+                    except Exception, err:
+                        # Grab all Exceptions
+                        set_status('Failed', err)
+                        break
         # FIXME Currently, the additional commands entry that comes
         #       in the job/build request is not handled here.
 

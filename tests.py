@@ -17,9 +17,10 @@ import pybit
 
 here = os.path.abspath(os.path.dirname(__file__))
 TESTING_CONFIG = os.path.join(here, 'testing.ini')
+MOCK_QUEUE_MESSAGE = (None, None, '{"py/object": "pybit.models.BuildRequest", "commands": "", "timestamp": null, "job": {"py/object": "pybit.models.Job", "packageinstance": {"py/object": "pybit.models.PackageInstance", "format": {"py/object": "pybit.models.Format", "id": 1, "name": "completezip"}, "package": {"py/object": "pybit.models.Package", "version": "1.2", "id": 1, "name": "m9003"}, "master": false, "suite": {"py/object": "pybit.models.Suite", "id": 1, "name": "latex"}, "distribution": {"py/object": "pybit.models.Dist", "id": 3, "name": "openstax"}, "arch": {"py/object": "pybit.models.Arch", "id": 1, "name": "any"}, "id": 1}, "id": 1, "buildclient": null}, "transport": {"py/object": "pybit.models.Transport", "uri": "http://cnx.org/content/", "id": null, "vcs_id": "latest", "method": "http"}, "web_host": "localhost:8080"}',)
 
 
-def test_pipeline_info_getter(message, set_status, settings):
+def test_pipeline_info_getter(message, set_status, settings={}):
     """Get some info and stick it in the settings."""
     # Push the current location into the settings for a simple check
     set_status('Building', "Gathering build information.")
@@ -27,13 +28,9 @@ def test_pipeline_info_getter(message, set_status, settings):
     settings['package_url'] = None
     settings['here'] = here
 
-def test_pipeline_process_info(message, set_status, settings):
+def test_pipeline_process_info(message, set_status, settings={}):
     """Do some work."""
-    try:
-        assert 'here' in settings
-    except AssertionError, err:
-        set_status('Failed', err)
-        raise err
+    assert 'here' in settings
     # The work... Note: The results of the work wouldn't normally be
     #   stored in the settings, but this is the easiest way to test
     #   for job completion.
@@ -78,12 +75,40 @@ class ClientTest(unittest.TestCase):
         from rbit import Config
         return Config.from_file(TESTING_CONFIG)
 
-    def test_act_on_a_job(self):
-        # Create a job, act on it and check for the intented results.
-
+    def _make_one(self, config=None):
+        if config is None:
+            config = self._make_config()
         from rbit import Client
-        client = Client.from_config(self._make_config())
+        client = Client.from_config(config)
+        self._patch_client_channel(client)
+        return client
+
+    def _patch_client_channel(self, client):
         # Patch the client's connection code.
         client._channel = mock.MagicMock()
-        client._channel.basic_get.return_value = (None, None, '{"py/object": "pybit.models.BuildRequest", "commands": "", "timestamp": null, "job": {"py/object": "pybit.models.Job", "packageinstance": {"py/object": "pybit.models.PackageInstance", "format": {"py/object": "pybit.models.Format", "id": 1, "name": "completezip"}, "package": {"py/object": "pybit.models.Package", "version": "1.2", "id": 1, "name": "m9003"}, "master": false, "suite": {"py/object": "pybit.models.Suite", "id": 1, "name": "latex"}, "distribution": {"py/object": "pybit.models.Dist", "id": 3, "name": "openstax"}, "arch": {"py/object": "pybit.models.Arch", "id": 1, "name": "any"}, "id": 1}, "id": 1, "buildclient": null}, "transport": {"py/object": "pybit.models.Transport", "uri": "http://cnx.org/content/", "id": null, "vcs_id": "latest", "method": "http"}, "web_host": "localhost:8080"}',)
+        client._channel.basic_get.return_value = MOCK_QUEUE_MESSAGE
+
+    def test_act_on_a_job(self):
+        # Check for the intented results.
+        client = self._make_one()
         client.act()
+
+    def test_set_status_on_failure(self):
+        # Check for status results.
+        config = self._make_config()
+        # Override the config to use a failing pipeline. Without the
+        #   first pipeline function, the main endpoint will fail due
+        #   to the missing setting.
+        queue_name = 'openstax_any_latex_completezip'
+        config._pipelines[queue_name]['pipeline'].reverse()
+
+        # Patch the _set_status method to capture the messages.
+        statuses = []
+        def _set_status(status, build_request):
+            statuses.append(status)
+
+        client = self._make_one(config)
+        client._set_status = _set_status
+
+        client.act()
+        self.assertTrue(len(statuses) == 1)

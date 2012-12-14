@@ -183,6 +183,8 @@ class Client(object):
                 except Exception, err:
                     # Grab all Exceptions
                     set_status('Failed', err)
+                else:
+                    self._channel.basic_ack(delivery_tag=method.delivery_tag)
         # FIXME Currently, the additional commands entry that comes
         #       in the job/build request is not handled here.
 

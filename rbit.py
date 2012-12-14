@@ -257,8 +257,9 @@ def main(argv=None):
 
     # Roll through the client at a time interval.
     while True:
+        with client as c:
+            c.act()
         time.sleep(args.poll_time)
-        client.act()
 
 
 if __name__ == '__main__':

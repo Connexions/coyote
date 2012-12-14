@@ -51,9 +51,13 @@ def parse_runner_line(line):
     if processor_type != 'python':
         raise NotImplementedError
     module_path, function = info.split(':')
-    package = module_path.split('.')
-    module = '.' + package[-1]
-    package = '.'.join(package[:-1])
+    package_path = module_path.split('.')
+    package = '.'.join(package_path[:-1])
+    if not package:
+        module = package_path[0]
+    else:
+        # Relative path to module
+        module = '.' + package_path[-1]
     m = import_module(module, package)
     return getattr(m, function)
 

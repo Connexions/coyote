@@ -15,12 +15,15 @@ import time
 import logging
 import argparse
 from importlib import import_module
-from ConfigParser import ConfigParser
+from logging.config import fileConfig as load_logging_configuration
+from ConfigParser import RawConfigParser
 
 import jsonpickle
 import pika
 import requests
 import pybit
+
+logger = logging.getLogger('rbit')
 
 
 def parse_runner_line(line):
@@ -69,7 +72,7 @@ class Config(object):
     @classmethod
     def from_file(cls, ini_file):
         """Used to initialize the configuration object from an INI file."""
-        config = ConfigParser()
+        config = RawConfigParser()
         if hasattr(ini_file, 'read'):
             config.readfp(ini_file)
         else:
@@ -87,7 +90,11 @@ class Config(object):
         amqp_settings = all_settings['amqp']
         del all_settings['rbit']
         del all_settings['amqp']
-        runners = all_settings
+        runners = {}
+        for name, value in all_settings.items():
+            if name.startswith('runner:'):
+                name = name.lstrip('runner:')
+                runners[name] = value
         return cls(rbit_settings, amqp_settings, runners)
 
     @property
@@ -143,14 +150,8 @@ class Client(object):
         payload = {'status': status}
         job_status_url = "http://{0}/job/{1}".format(build_request.web_host,
                                                      build_request.get_job_id())
-        try:
-            # XXX Hard coded PyBit credentials.
-            requests.put(job_status_url, payload,
-                         auth=requests.auth.HTTPBasicAuth('admin', 'pass'))
-        except requests.exceptions.ConnectionError:
-            pass
-        else:
-            logging.debug("Couldn't find status or current_request")
+        requests.put(job_status_url, payload,
+                     auth=requests.auth.HTTPBasicAuth('admin', 'pass'))
 
     def act(self):
         """Rolls through the pipeline"""
@@ -159,6 +160,7 @@ class Client(object):
 
         def set_status(status, message=''):
             build_request = jsonpickle.decode(msg_body)
+            logger.debug("{0} - {1}".format(status, message))
             self._set_status(status, build_request)
 
         if self._channel is not None:
@@ -216,7 +218,7 @@ class Client(object):
         for suite, info in self._queue_list.iteritems():
             queue = info['queue']
             route = info['route']
-            logging.debug("Creating queue with name:" + queue)
+            logger.debug("Connecting to queue with name: " + queue)
             self._channel.queue_declare(queue=queue,
                                         durable=True, exclusive=False,
                                         auto_delete=False)
@@ -254,7 +256,9 @@ def main(argv=None):
                         help="INI configuration file")
     args = parser.parse_args(argv)
 
+    load_logging_configuration(args.config)
     # Load the configuration
+    args.config.seek(0)
     config = Config.from_file(args.config)
     # Create the client
     client = Client.from_config(config)

@@ -53,8 +53,8 @@ Configuration
 The configuration is stored in an ini format for simplicity. There are
 **two required sections**. They are `rbit` and `amqp`,
 which contain settings for the client itself and the message queue,
-respectfully. All other sections are/will be considered job runner
-definitions. For example::
+respectfully. All sections prefixed with `runner:` are/will be
+considered job runner definitions. For example::
 
     [rbit]
     # The `name` corresponds with the `BuildBox` registration in PyBit's
@@ -81,10 +81,10 @@ don't know of a better way to name them at this time.
 .. note:: The way naming of runners will likely change in some iteration.
 
 Each job runner can have it's own set of configuration values. For a
-section to be a valid pipeline it **must** define a value for the
-`runner` attribute in the pipeline's section. For example::
+section to be a valid runner it **must** define a value for the
+`runner` attribute in the job runner's section. For example::
 
-    [openstax_any_latex_pdf]
+    [runner:openstax_any_latex_pdf]
     runner = python!Products.RhaptosPrint.printing:main
     deposit_location = /mnt/www
 
@@ -96,12 +96,12 @@ The runner is defined in configuration by the processor, which calls
 the actually working logic or is the working logic itself. For
 example, you might configure a shell process like this::
 
-    [cnx_desktop_princexml_epub]
+    [runner:cnx_desktop_princexml_epub]
     runner = shell!%ID.pdf
 
 Or a Python runner like::
 
-    [cnx_any_latex_pdf]
+    [runner:cnx_any_latex_pdf]
     runner = python!rbitext.rhaptos_print:make_print
 
 The Python processor calls a function. The function is given access to
@@ -134,7 +134,7 @@ the ``my_worker.py`` module.
 
 The configuration for this might look like this::
 
-    [ccap_any_latex_completezip]
+    [runner:ccap_any_latex_completezip]
     runner = python!my_worker:hello
     name = You
 

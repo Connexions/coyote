@@ -14,6 +14,7 @@ Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
 import time
 import logging
 import argparse
+from importlib import import_module
 from ConfigParser import ConfigParser
 
 import jsonpickle
@@ -46,9 +47,12 @@ def parse_runner_line(line):
     #       For now the only supported processor is `python`.
     if processor_type != 'python':
         raise NotImplementedError
-    module_path, func = info.split(':')
-    module = __import__(module_path)
-    return getattr(module, func)
+    module_path, function = info.split(':')
+    package = module_path.split('.')
+    module = '.' + package[-1]
+    package = '.'.join(package[:-1])
+    m = import_module(module, package)
+    return getattr(m, function)
 
 
 class Config(object):

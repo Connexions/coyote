@@ -36,13 +36,18 @@ Usage
 
 The general usage of the code from the command line interface goes as follows::
 
-    $ rbit --debug rbit.ini
+    $ rbit rbit.ini
 
 In this case we are telling the `rbit` interface to start in debug
 mode, which allows for more information to be printed to standard
 out. The single file argument is the configuration file containing
 general information about the message queue as well as the configured
 runners.
+
+The command line interface accepts a ``--poll-time`` option with a
+value in seconds. The default value for this option is ``60``. This
+option controls how often the client will check the message queue
+for new messages.
 
 The `rbit` interface will happily run in foreground more until you
 decide to stop the process using `Ctrl+c`.
@@ -103,6 +108,9 @@ Or a Python runner like::
 
     [runner:cnx_any_latex_pdf]
     runner = python!rbitext.rhaptos_print:make_print
+    python = /usr/local/bin/python2.4
+    print-dir = Products.RhaptosPrint/Products/RhaptosPrint/printing
+    host = http://cnx.org
 
 The Python processor calls a function. The function is given access to
 the message body, a status callback function and the locally defined
@@ -136,7 +144,7 @@ The configuration for this might look like this::
 
     [runner:ccap_any_latex_completezip]
     runner = python!my_worker:hello
-    name = You
+    name = World
 
 In this example, we set the status twice. We set the status during the
 start of the job. Then we may or maynot set the status to failed due
@@ -158,7 +166,7 @@ Installation and Tests
 Installation
 ~~~~~~~~~~~~
 
-This code uses `setuptools` to distribute itself. To install, use of
+This code uses ``setuptools`` to distribute itself. To install, use of
 the following methods::
 
     $ python setup.py install
@@ -185,7 +193,7 @@ with the package. If you were to run the tests on a production
 system, you could bork the live data in your message queue.
 
 To run the tests, change into the distribution root and run the
-`unittest` discovery command on from there::
+``unittest`` discovery command on from there::
 
     $ cd $DISTRIBUTION_ROOT
     $ python -m unittest discover
@@ -208,14 +216,14 @@ time. The code that is used in PyBit Client has a static set of
 statuses to pull from. At the same time, the web front-end allows for
 the creation and deletion of statuses. This makes sense, but could
 result in odd behavior if the statuses are removed from the
-front-end. However, chances are that it would only disable job status
-filtering results.
+front-end. However, chances are that it would only disable the
+filtering of job status results.
 
 The 'Blocked' status is something we will likely not use in the near
 future. The PyBit client implemenation uses this status in one
-place. When a build fails due to missing dependencies, the client sets
-the status to blocked. As a result the job gets republished/pushed
-back onto the queue.
+place. It is used when a build fails due to missing dependencies,
+in which case the client sets the status to blocked.
+As a result the job gets republished to the queue.
 
 PyBit Queue Design
 ~~~~~~~~~~~~~~~~~~
@@ -223,8 +231,8 @@ PyBit Queue Design
 The queues used by PyBit are named queues with named routes. It looks
 to me that the contents that the queue and the route have the same
 names. This doesn't really help anything and in fact is a bit
-redundant. I believe they have taken this approach for one of two
-reasons:
+redundant. I believe the PyBit developers have taken this approach
+for one of two reasons:
 
 1. Creating a named queue from the PyBit web front-end allows for the
    job to be sent to a queue no matter the status of the queues,

@@ -17,9 +17,15 @@ import pybit
 
 here = os.path.abspath(os.path.dirname(__file__))
 TESTING_CONFIG = os.path.join(here, 'testing.ini')
-MOCK_QUEUE_MESSAGE = (None, None, '{"py/object": "pybit.models.BuildRequest", "commands": "", "timestamp": null, "job": {"py/object": "pybit.models.Job", "packageinstance": {"py/object": "pybit.models.PackageInstance", "format": {"py/object": "pybit.models.Format", "id": 1, "name": "completezip"}, "package": {"py/object": "pybit.models.Package", "version": "1.2", "id": 1, "name": "m9003"}, "master": false, "suite": {"py/object": "pybit.models.Suite", "id": 1, "name": "latex"}, "distribution": {"py/object": "pybit.models.Dist", "id": 3, "name": "openstax"}, "arch": {"py/object": "pybit.models.Arch", "id": 1, "name": "any"}, "id": 1}, "id": 1, "buildclient": null}, "transport": {"py/object": "pybit.models.Transport", "uri": "http://cnx.org/content/", "id": null, "vcs_id": "latest", "method": "http"}, "web_host": "localhost:8080"}',)
+MOCK_QUEUE_MESSAGE = '{"py/object": "pybit.models.BuildRequest", "commands": "", "timestamp": null, "job": {"py/object": "pybit.models.Job", "packageinstance": {"py/object": "pybit.models.PackageInstance", "format": {"py/object": "pybit.models.Format", "id": 1, "name": "completezip"}, "package": {"py/object": "pybit.models.Package", "version": "1.2", "id": 1, "name": "m9003"}, "master": false, "suite": {"py/object": "pybit.models.Suite", "id": 1, "name": "latex"}, "distribution": {"py/object": "pybit.models.Dist", "id": 3, "name": "openstax"}, "arch": {"py/object": "pybit.models.Arch", "id": 1, "name": "any"}, "id": 1}, "id": 1, "buildclient": null}, "transport": {"py/object": "pybit.models.Transport", "uri": "http://cnx.org/content/", "id": null, "vcs_id": "latest", "method": "http"}, "web_host": "localhost:8080"}'
 TEST_QUEUE_NAME = 'openstax_any_latex_completezip'
 
+
+def _make_mock_message_queue_response():
+    """Creates a mock response for the channel's basic_get method."""
+    method = mock.MagicMock()
+    method.delivery_tag = 1234
+    return (method, None, MOCK_QUEUE_MESSAGE,)
 
 def test_runner_info_getter(message, set_status, settings={}):
     """Get some info and stick it in the settings."""
@@ -101,7 +107,8 @@ class ClientTest(unittest.TestCase):
     def _patch_client_channel(self, client):
         # Patch the client's connection code.
         client._channel = mock.MagicMock()
-        client._channel.basic_get.return_value = MOCK_QUEUE_MESSAGE
+        client._channel.basic_get.return_value = _make_mock_message_queue_response()
+        client._channel.basic_ack.return_value = None
 
     def test_act_on_a_job(self):
         # Check for the intented results.

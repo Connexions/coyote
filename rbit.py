@@ -26,6 +26,11 @@ import pybit
 logger = logging.getLogger('rbit')
 
 
+class NotConnectedError(Exception):
+    """Used to discribe a situation where a class should be connected."""
+
+
+
 def parse_runner_line(line):
     """Find suitable importers/handlers for the runner line.
     Return a callables for the given line.
@@ -167,24 +172,28 @@ class Client(object):
             logger.debug("{0} - {1}".format(status, message))
             self._set_status(status, build_request)
 
-        if self._channel is not None:
-            for suite in self._queue_list:
-                queue = self._queue_list[suite]['queue']
-                method, header, msg_body = self._channel.basic_get(queue=queue)
-                if msg_body:
-                    current_queue = queue
-                    break
-            if msg_body is not None:
-                # XXX This will need refactored. To much raw data work.
-                settings = self._runner_settings[current_queue]
-                runner = parse_runner_line(settings['runner'])
-                try:
-                    runner(msg_body, set_status, settings)
-                except Exception, err:
-                    # Grab all Exceptions
-                    set_status('Failed', err)
-                else:
-                    self._channel.basic_ack(delivery_tag=method.delivery_tag)
+        if self._channel is None:
+            raise NotConnectedError()
+
+        for suite in self._queue_list:
+            queue = self._queue_list[suite]['queue']
+            method, header, msg_body = self._channel.basic_get(queue=queue)
+            if msg_body:
+                current_queue = queue
+                break
+        if msg_body is not None:
+            build_request = jsonpickle.decode(msg_body)
+            # XXX This will need refactored. To much raw data work.
+            settings = self._runner_settings[current_queue]
+            runner = parse_runner_line(settings['runner'])
+            try:
+                runner(msg_body, set_status, settings)
+            except Exception, err:
+                # Grab all Exceptions
+                set_status('Failed', err)
+            else:
+                self._channel.basic_ack(delivery_tag=method.delivery_tag)
+
         # FIXME Currently, the additional commands entry that comes
         #       in the job/build request is not handled here.
 

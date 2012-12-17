@@ -57,7 +57,8 @@ class ClientConfigurationTest(unittest.TestCase):
         self.assertTrue(isinstance(client, Client))
 
 
-class XXXClientBaseFunctionalityTest(unittest.TestCase):
+
+class ClientBaseFunctionalityTest(unittest.TestCase):
 
     # XXX This is a test that can be removed. It is a preliminary test
     #     to verify a connection can be made.
@@ -70,6 +71,17 @@ class XXXClientBaseFunctionalityTest(unittest.TestCase):
         with client as connected_client:
             connected_client.act()
         # If the connection is good this test passes.
+
+    def test_no_connection_error(self):
+        # Make sure the NotConnectedError is raised when a connection
+        #   hasn't been initialized.
+        from rbit import Config
+        config = Config.from_file(TESTING_CONFIG)
+        from rbit import Client
+        client = Client.from_config(config)
+        from rbit import NotConnectedError
+        with self.assertRaises(NotConnectedError):
+            client.act()
 
 
 class ClientTest(unittest.TestCase):

@@ -23,8 +23,11 @@ def add_package(args):
     data = {'name': args.id, 'version': args.version}
     resp = requests.post(url, data=data, auth=auth)
     if resp.status_code != 200:
-        return 1
-    return 0
+        raise Exception("Failed to add the package with the following data:"
+                        "\ndata: {0}"
+                        "\nresponse status: {1}"
+                        "\nresponse body: {2}"
+                        .format(data, resp.status_code, resp.text))
 
 
 def _name2id(lookup_name, name, args):
@@ -40,17 +43,20 @@ def add_instance(args):
     """Adds a package instance to PyBit"""
     url = "http://{0}:{1}/packageinstance/".format(args.host, args.port)
     auth = (args.user, args.password,)
-    data = {'package': args.id, 'version': args.version,
+    data = {'package': args.id,
+            'version': args.version,
             'arch_id': _name2id('arch', args.platform, args),
             'suite_id': _name2id('suite', args.suite, args),
             'dist_id': _name2id('dist', args.project, args),
             'format_id': _name2id('format', args.format, args),
             }
-    print(data)
     resp = requests.post(url, data=data, auth=auth)
     if resp.status_code != 200:
-        return 2
-    return 0
+        raise Exception("Failed to add the package with the following data:"
+                        "\ndata: {0}"
+                        "\nresponse status: {1}"
+                        "\nresponse body: {2}"
+                        .format(data, resp.status_code, resp.text))
 
 
 def main(argv=None):
@@ -96,8 +102,8 @@ def main(argv=None):
                                            "module/collection")
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    args.func(args)
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()

@@ -59,6 +59,40 @@ def add_instance(args):
                         .format(data, resp.status_code, resp.text))
 
 
+def _packageinstance2id(name, version, args):
+    """Lookup name in the package instance listing to get its id mapping."""
+    url = "http://{0}:{1}/packageinstance/page/1".format(args.host, args.port)
+    auth = (args.user, args.password,)
+    resp = requests.get(url, auth=auth)
+    data = dict([(v['package']['version'], v['package']['id'],)
+                 for v in resp.json
+                 if v['package']['name'] == unicode(name)
+                 ])
+    return data[unicode(version)]
+
+
+def add_job(args):
+    """Adds a job to PyBit"""
+    url = "http://{0}:{1}/job/".format(args.host, args.port)
+    auth = (args.user, args.password,)
+    data = {'package': args.id,
+            'packageinstance_id': _packageinstance2id(args.id, args.version,
+                                                      args),
+            'uri': args.uri,
+            'method': '',
+            'vcs_id': '',
+            'commands': '',
+            }
+    resp = requests.post(url, data=data, auth=auth)
+    if resp.status_code != 200:
+        raise Exception("Failed to add the package with the following data:"
+                        "\ndata: {0}"
+                        "\nresponse status: {1}"
+                        "\nresponse body: {2}"
+                        .format(data, resp.status_code, resp.text))
+
+
+
 def main(argv=None):
     """Command line utility"""
     parser = argparse.ArgumentParser(description="PyBit builder for rhaptos")
@@ -100,6 +134,11 @@ def main(argv=None):
     job_parser = subparsers.add_parser('job',
                                        help="adds a job to build a "\
                                            "module/collection")
+    job_parser.set_defaults(func=add_job)
+    job_parser.add_argument('id', help="module/collection id")
+    job_parser.add_argument('version',
+                            help="version of the module/collection")
+    job_parser.add_argument('uri', help="URI to the module/collection")
 
     args = parser.parse_args(argv)
     args.func(args)

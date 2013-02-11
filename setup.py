@@ -9,6 +9,7 @@ install_requirements = [
     'pybit',
     'pika',
     'jsonpickle',
+    'requests',
     ]
 test_requirements = [
     'mock',

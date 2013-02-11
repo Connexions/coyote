@@ -159,8 +159,11 @@ class Client(object):
         payload = {'status': status}
         job_status_url = "http://{0}/job/{1}".format(build_request.web_host,
                                                      build_request.get_job_id())
-        requests.put(job_status_url, payload,
-                     auth=requests.auth.HTTPBasicAuth('admin', 'pass'))
+        # FIXME We need a better way to authenticate... api keys maybe?
+        username = self._runner_settings.get('pybitweb-username', 'admin')
+        password = self._runner_settings.get('pybitweb-password', 'pass')
+        auth = requests.auth.HTTPBasicAuth(username, password)
+        requests.put(job_status_url, payload, auth=auth)
 
     def act(self):
         """Rolls through the pipeline"""

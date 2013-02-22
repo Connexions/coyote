@@ -14,6 +14,7 @@ Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
 import time
 import logging
 import argparse
+import traceback
 from importlib import import_module
 from logging.config import fileConfig as load_logging_configuration
 from ConfigParser import RawConfigParser
@@ -194,6 +195,7 @@ class Client(object):
             except Exception, err:
                 # Grab all Exceptions
                 set_status('Failed', err)
+                traceback.print_exc()
             else:
                 self._channel.basic_ack(delivery_tag=method.delivery_tag)
 

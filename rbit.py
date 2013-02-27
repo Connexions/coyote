@@ -38,6 +38,14 @@ class Blocked(Exception):
     """
 
 
+class Failed(Exception):
+    """Occures when a job fails in a known way. This is used by task runners
+    to catch and report failure in a way that makes it easier to debug the
+    failure.
+
+    """
+
+
 def parse_runner_line(line):
     """Find suitable importers/handlers for the runner line.
     Return a callables for the given line.
@@ -201,8 +209,11 @@ class Client(object):
                 runner(msg_body, set_status, settings)
             except Blocked as blocker:
                 set_status('Blocked', blocker.message)
-                # ack()
-                # self.republish(build_request)
+                ##ack()
+                ##self.republish(build_request)
+            except Failed as failure:
+                set_status('Failed', failure.message)
+                ##ack()
             except Exception as err:
                 # Grab all Exceptions
                 set_status('Failed', err)

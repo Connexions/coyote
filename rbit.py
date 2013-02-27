@@ -209,8 +209,8 @@ class Client(object):
                 runner(msg_body, set_status, settings)
             except Blocked as blocker:
                 set_status('Blocked', blocker.message)
-                ##ack()
-                ##self.republish(build_request)
+                ack()
+                self.republish(build_request, current_queue)
             except Failed as failure:
                 set_status('Failed', failure.message)
                 ##ack()
@@ -224,13 +224,16 @@ class Client(object):
         # FIXME Currently, the additional commands entry that comes
         #       in the job/build request is not handled here.
 
-    def republish(self, job):
-        """Republish the job onto the queue. This is usually triggered when
-        something wasn't ready and under normal circumstances the job would
-        be successful.
+    def republish(self, build_request, queue):
+        """Republish the job onto the given queue. This is usually
+        triggered when something wasn't ready and under normal
+        circumstances the job would be successful.
 
         """
-        return NotImplemented
+        message = jsonpickle.encode(build_request)
+        self._channel.basic_publish(exchange=pybit.exchange_name,
+                                    routing_key=queue,
+                                    body=message)
 
     # ############################ #
     #   Connection State Methods   #

@@ -31,6 +31,12 @@ class NotConnectedError(Exception):
     """Used to discribe a situation where a class should be connected."""
 
 
+class Blocked(Exception):
+    """Occures when a job is blocked from by something
+    (e.g. missing data, authentication needed, user input needed)
+
+    """
+
 
 def parse_runner_line(line):
     """Find suitable importers/handlers for the runner line.
@@ -190,14 +196,19 @@ class Client(object):
             # XXX This will need refactored. To much raw data work.
             settings = self._runner_settings[current_queue]
             runner = parse_runner_line(settings['runner'])
+            ack = lambda: self._channel.basic_ack(method.delivery_tag)
             try:
                 runner(msg_body, set_status, settings)
-            except Exception, err:
+            except Blocked as blocker:
+                set_status('Blocked', blocker.message)
+                # ack()
+                # self.republish(build_request)
+            except Exception as err:
                 # Grab all Exceptions
                 set_status('Failed', err)
                 traceback.print_exc()
             else:
-                self._channel.basic_ack(delivery_tag=method.delivery_tag)
+                ack()
 
         # FIXME Currently, the additional commands entry that comes
         #       in the job/build request is not handled here.

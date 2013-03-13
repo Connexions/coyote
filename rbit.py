@@ -11,7 +11,6 @@ https://github.com/nicholasdavidson/pybit licensed under GPL2.1.
 This software is subject to the provisions of the GNU Lesser General
 Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
 """
-import time
 import logging
 import argparse
 import traceback
@@ -24,12 +23,16 @@ import pika
 import requests
 import pybit
 
+
+CONFIG__HANDLER_PREFIX = 'runner:'
 logger = logging.getLogger('rbit')
+# Global configuration object
+config = None
 
 
-class NotConnectedError(Exception):
-    """Used to discribe a situation where a class should be connected."""
-
+# ##################### #
+#   Public Exceptions   #
+# ##################### #
 
 class Blocked(Exception):
     """Occures when a job is blocked from by something
@@ -83,15 +86,18 @@ def parse_runner_line(line):
 
 
 class Config(object):
-    """A configuration class can hold information about the client, message
-    queue, and runner settings.
+    """\
+    A configuration agend that holds and acts on information about the
+    consumer connection, message queue(s) to follow, and what code &
+    additional information should be run & handed to the code when
+    a message is recieved (runner settings).
 
     """
 
-    def __init__(self, rbit_settings, amqp_settings, runners={}):
-        self.rbit = rbit_settings
+    def __init__(self, queue_mappings, amqp_settings, runners={}):
+        self.queue_mappings = queue_mappings
         self.amqp = amqp_settings
-        self._runners = runners
+        self.runners = runners
 
     @classmethod
     def from_file(cls, ini_file):
@@ -109,211 +115,143 @@ class Config(object):
                 result[section] = dict(c.items(section))
             return result
 
-        all_settings = config_to_dict(config)
-        rbit_settings = all_settings['rbit']
-        amqp_settings = all_settings['amqp']
-        del all_settings['rbit']
-        del all_settings['amqp']
+        settings = config_to_dict(config)
+        rbit = settings['rbit']
+        amqp = settings['amqp']
+
         runners = {}
-        for name, value in all_settings.items():
-            if name.startswith('runner:'):
-                name = name.lstrip('runner:')
+        for name, value in settings.items():
+            if name.startswith(CONFIG__HANDLER_PREFIX):
+                name = name[len(CONFIG__HANDLER_PREFIX):]
                 runners[name] = value
-        return cls(rbit_settings, amqp_settings, runners)
 
-    @property
-    def rbit_suites(self):
-        """Parse the configured suites to a list."""
-        return [s.strip() for s in self.rbit['suites'].split(',')]
+        # Parse the <queue_name>:<runner_name> lines.
+        queue_mappings = [v.strip()
+                          for v in rbit.get('queue-mappings', '').split('\n')
+                          if v.strip() and v.find(':') >= 1]
+        queue_mappings = dict([v.split(':') for v in queue_mappings])
+        return cls(queue_mappings, amqp, runners)
 
+def set_status(status, build_request):
+    """Update the job's status using the build_request object and global configuration."""
+    global config
+    payload = {'status': status}
+    job_status_url = "http://{0}/job/{1}".format(build_request.web_host,
+                                                 build_request.get_job_id())
+    # FIXME We need a better way to authenticate... api keys maybe?
+    #       We don't really want to be sending status updates via
+    #       http anyhow, so this may not be important in the future.
+    username = 'admin'
+    password = 'pass'
+    auth = requests.auth.HTTPBasicAuth(username, password)
+    requests.put(job_status_url, payload, auth=auth)
 
-class Client(object):
-    """Generic client implementation for a delegator of worker/drone process
-    trigger by a queued entry.
+def republish(build_request, queue, channel):
+    """Republish or push the build request back to the originating queue."""
+    body = jsonpickle.encode(build_request)
+    channel.basic_publish(exchange='', routing_key=queue, body=body)
+
+def get_message_handler(settings, queue):
+    """This looks up the runner from the settings and wraps it to make it
+    a pika compatible message handler. We pass in the queue, because it is
+    required for republication of build requests and it cannot be reliably
+    derived due to PyBit translation magic (e.g. any becomes any architecture
+    distributes to multiple queues).
 
     """
+    runner = parse_runner_line(settings['runner'])
 
-    def __init__(self, architecture, distribution, format, suites,
-                 amqp_info, runner_settings={}):
-        self.architecture = architecture
-        self.distribution = distribution
-        self.format = format
+    def message_handler(channel, method, headers, body):
+        # Parse the message into a Python object. (Assuming this is a
+        #   PyBit BuildRequest.)
+        build_request = jsonpickle.decode(body)
 
-        # We subscribe to a list of queues based on the parameters
-        #   passed in to the client. The suite list is used to
-        #   populate the queue names.
-        self._queue_list = dict()
-        for suite in suites:
-            queue = pybit.get_build_queue_name(self.distribution,
-                                               self.architecture,
-                                               suite, self.format)
-            route = pybit.get_build_queue_name(self.distribution,
-                                               self.architecture,
-                                               suite, self.format)
-            self._queue_list[suite] = {'queue': queue, 'route': route}
+        # Update the state of the job in PyBit.
+        set_status('Building', build_request)
 
-        self._amqp_info = amqp_info
-        # Message queue storage attributes. These values get set when
-        #   the connection is initialized and a queue has a list of
-        #   work to be done.
-        self._connection = None
-        self._channel = None
+        # Start the building sequence by updating the build's status.
+        job_id = build_request.get_job_id()
+        build_reqeust.stamp_request()
+        timestamp = build_request.get_buildstamp()
+        status_message = "Job '{0}', timestamp: {1}".format(job_id, timestamp)
+        logger.info(status_message)
 
-        self._runner_settings = runner_settings
-
-    @classmethod
-    def from_config(cls, config):
-        """Initialize the class using an `rbit.Config` instance."""
-        return cls(config.rbit['architecture'], config.rbit['distribution'],
-                   config.rbit['format'], config.rbit_suites, config.amqp,
-                   # XXX Just making this work. Ideally the config
-                   #     object would spit out a list of Pipeline objects.
-                   config._runners)
-
-    def _set_status(self, status, build_request):
-        payload = {'status': status}
-        job_status_url = "http://{0}/job/{1}".format(build_request.web_host,
-                                                     build_request.get_job_id())
-        # FIXME We need a better way to authenticate... api keys maybe?
-        username = self._runner_settings.get('pybitweb-username', 'admin')
-        password = self._runner_settings.get('pybitweb-password', 'pass')
-        auth = requests.auth.HTTPBasicAuth(username, password)
-        requests.put(job_status_url, payload, auth=auth)
-
-    def act(self):
-        """Rolls through the pipeline"""
-        method, header, msg_body = (None, None, None,)
-        current_queue = None
-
-        def set_status(status, message=''):
-            build_request = jsonpickle.decode(msg_body)
-            logger.debug("{0} - {1}".format(status, message))
-            self._set_status(status, build_request)
-
-        if self._channel is None:
-            raise NotConnectedError()
-
-        for suite in self._queue_list:
-            queue = self._queue_list[suite]['queue']
-            method, header, msg_body = self._channel.basic_get(queue=queue)
-            if msg_body:
-                current_queue = queue
-                break
-        if msg_body is not None:
-            build_request = jsonpickle.decode(msg_body)
-            # XXX This will need refactored. To much raw data work.
-            settings = self._runner_settings[current_queue]
-            runner = parse_runner_line(settings['runner'])
-            ack = lambda: self._channel.basic_ack(method.delivery_tag)
-            try:
-                runner(msg_body, set_status, settings)
-            except Blocked as blocker:
-                set_status('Blocked', blocker.message)
-                ack()
-                self.republish(build_request, current_queue)
-            except Failed as failure:
-                set_status('Failed', failure.message)
-                ##ack()
-            except Exception as err:
-                # Grab all Exceptions
-                set_status('Failed', err)
-                traceback.print_exc()
-            else:
-                ack()
-
-        # FIXME Currently, the additional commands entry that comes
-        #       in the job/build request is not handled here.
-
-    def republish(self, build_request, queue):
-        """Republish the job onto the given queue. This is usually
-        triggered when something wasn't ready and under normal
-        circumstances the job would be successful.
-
-        """
-        message = jsonpickle.encode(build_request)
-        self._channel.basic_publish(exchange=pybit.exchange_name,
-                                    routing_key=queue,
-                                    body=message)
-
-    # ############################ #
-    #   Connection State Methods   #
-    # ############################ #
-
-    def connect(self):
-        """Connect to the message queue using the information passed into
-        the class at instantiation.
-
-        .. todo:: Document the AMQP setting information key/value pairs after
-           we have worked out all the information that we need.
-
-        """
-        host = self._amqp_info.get('host', 'localhost')
-        port = int(self._amqp_info.get('port', 5672))
-        user = self._amqp_info.get('user')
-        password = self._amqp_info.get('password')
-        virtual_host = self._amqp_info.get('virtual_host')
-
-        credentials = pika.PlainCredentials(user, password)
-        connection_parameters = pika.ConnectionParameters(
-                host, port, virtual_host, credentials)
-
-        self._connection = pika.BlockingConnection(connection_parameters)
-        self._channel = self._connection.channel()
-
-        for suite, info in self._queue_list.iteritems():
-            queue = info['queue']
-            route = info['route']
-            logger.debug("Connecting to queue with name: " + queue)
-            self._channel.queue_declare(queue=queue,
-                                        durable=True, exclusive=False,
-                                        auto_delete=False)
-            self._channel.queue_bind(exchange=pybit.exchange_name,
-                                     queue=queue, routing_key=route)
-
-    def disconnect(self):
+        # Call the runner with the parsed message and settings.
+        acknowledge = lambda: channel.basic_ack(method.delivery_tag)
+        artifacts = []
         try:
-            try:
-                self._channel.close()
-            except (AttributeError, socket.error):
-                pass
-            self._connection.close()
-        except socket.error :
-            pass
+            artifacts = runner(build_request, settings)
+            # Acknowledge the message was recieved and processed.
+            set_status('Done', build_request)
+            acknowledge()
+        except (Failed, Blocked) as exc:
+            state = exc.__class__.__name__
+            logger.info("Job {0}'s state is now '{1}'.".format(job_id, state))
+            logger.debug("Job {0} had issues. {1}".format(job_id, exc.message),
+                         exc_info=1)
+            set_status(state, build_request)
+            republish(build_request, queue, channel)
+            acknowledge()
+        except Exception as exc:
+            logger.error(exc, exc_info=1)
 
-    # ############################# #
-    #   Context Management methods  #
-    # ############################# #
+        # Log the artifacts...
+        if artifacts:
+            quote = lambda (v): "'{0}'".format(v)
+            human_readable_artifacts = ', '.join([quote(a) for a in artifacts])
+            logger.debug("Artifacts: {0}".format(human_readable_artifacts))
 
-    def __enter__(self):
-        self.connect()
-        return self
+    return message_handler
 
-    def __exit__(self, type, value, traceback):
-        self.disconnect()
+def declare(queue_mappings, runner_settings, channel):
+    """Declare the queue(s) and bind the pybit exchange. Also bind
+    the runners to the queue declaration.
 
+    """
+    for queue, runner_name in queue_mappings.items():
+        settings = runner_settings[runner_name]
+        message_handler = get_message_handler(settings, queue)
+        def on_queue_declared(frame):
+            channel.basic_consume(message_handler, queue=queue)
+        channel.queue_declare(queue=queue, durable=True, exclusive=False,
+                              auto_delete=False, callback=on_queue_declared)
+
+def on_connected(connection):
+    """Called after an amqp connection has been established."""
+    # Open a new channel.
+    connection.channel(on_open_channel)
+
+def on_open_channel(channel):
+    """Called when a new channel has been established."""
+    global config
+    # Declare the queue, bind the exchange and initialize the message handlers.
+    declare(config.queue_mappings, config.runners, channel)
 
 def main(argv=None):
     """Command line utility"""
     parser = argparse.ArgumentParser(description="PyBit builder for rhaptos")
-    parser.add_argument('--poll-time', type=int, default=60,
-                        help="time to poll between idle periods")
     parser.add_argument('config', type=argparse.FileType('r'),
                         help="INI configuration file")
     args = parser.parse_args(argv)
 
     load_logging_configuration(args.config)
-    # Load the configuration
+    # Re-spool the file for a future read.
     args.config.seek(0)
+    # Load the configuration
+    global config
     config = Config.from_file(args.config)
-    # Create the client
-    client = Client.from_config(config)
 
-    # Roll through the client at a time interval.
-    while True:
-        with client as c:
-            c.act()
-        time.sleep(args.poll_time)
+    parameters = pika.ConnectionParameters()
+    connection = pika.SelectConnection(parameters, on_connected)
 
+    try:
+        # Loop so we can communicate with RabbitMQ
+        connection.ioloop.start()
+    except KeyboardInterrupt:
+        # Gracefully close the connection
+        connection.close()
+        # Loop until we're fully closed, will stop on its own
+        connection.ioloop.start()
 
 if __name__ == '__main__':
     main()

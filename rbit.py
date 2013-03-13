@@ -241,7 +241,15 @@ def main(argv=None):
     global config
     config = Config.from_file(args.config)
 
-    parameters = pika.ConnectionParameters()
+    host = config.amqp.get('host', 'localhost')
+    port = int(config.amqp.get('port', 5672))
+    user = config.amqp.get('user')
+    password = config.amqp.get('password')
+    virtual_host = config.amqp.get('virtual_host')
+
+    credentials = pika.PlainCredentials(user, password)
+    parameters = pika.ConnectionParameters(host, port, virtual_host,
+                                           credentials)
     connection = pika.SelectConnection(parameters, on_connected)
 
     try:

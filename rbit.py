@@ -171,7 +171,7 @@ def get_message_handler(settings, queue):
 
         # Start the building sequence by updating the build's status.
         job_id = build_request.get_job_id()
-        build_reqeust.stamp_request()
+        build_request.stamp_request()
         timestamp = build_request.get_buildstamp()
         status_message = "Job '{0}', timestamp: {1}".format(job_id, timestamp)
         logger.info(status_message)

@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 """\
-Pybit client implemenation for Rhaptos workers.
+A consumer/client implemenation that works with the PyBit system to track
+the status of running jobs.
 
 Author: Michael Mulich
 Copyright (c) 2012 Rice University
-
-Parts of the client code are derived from the PyBit client implementation at
-https://github.com/nicholasdavidson/pybit licensed under GPL2.1.
 
 This software is subject to the provisions of the GNU Lesser General
 Public License Version 2.1 (LGPL).  See LICENSE.txt for details.

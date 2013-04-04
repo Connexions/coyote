@@ -249,3 +249,8 @@ queued items that have been put in the default queue.
 
 This approach could be taken a step further to stop and start workers
 based on work available and the usage of slave boxes.
+
+License
+-------
+
+This software is subject to the provisions of the GNU Affero General Public License Version 3.0 (AGPL). See license.txt for details. Copyright (c) 2012 Rice University

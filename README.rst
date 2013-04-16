@@ -206,3 +206,17 @@ for one of two reasons:
    knowns data will persist even if no consumer is listening. 
 2. They may have started with named queues and never got the chance to
    remove the implementation.
+
+I think the best approach in this situation would be to setup a named
+queue from the PyBit web front-end that recieves all messages. Then
+have a default listener that watches for new build-clients. Once it
+sees a new build client it cycles through the queue, republishing
+queued items that have been put in the default queue.
+
+This approach could be taken a step further to stop and start workers
+based on work available and the usage of slave boxes.
+
+License
+-------
+
+This software is subject to the provisions of the GNU Affero General Public License Version 3.0 (AGPL). See license.txt for details. Copyright (c) 2012 Rice University

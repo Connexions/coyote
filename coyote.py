@@ -24,7 +24,7 @@ import pybit
 
 
 CONFIG__HANDLER_PREFIX = 'runner:'
-logger = logging.getLogger('rbit')
+logger = logging.getLogger('coyote')
 # Global configuration object
 config = None
 
@@ -47,6 +47,9 @@ class Failed(Exception):
 
     """
 
+# ################# #
+#   Configuration   #
+# ################# #
 
 def parse_runner_line(line):
     """Find suitable importers/handlers for the runner line.
@@ -115,7 +118,7 @@ class Config(object):
             return result
 
         settings = config_to_dict(config)
-        rbit = settings['rbit']
+        app = settings['coyote']
         amqp = settings['amqp']
 
         runners = {}
@@ -126,10 +129,15 @@ class Config(object):
 
         # Parse the <queue_name>:<runner_name> lines.
         queue_mappings = [v.strip()
-                          for v in rbit.get('queue-mappings', '').split('\n')
+                          for v in app.get('queue-mappings', '').split('\n')
                           if v.strip() and v.find(':') >= 1]
         queue_mappings = dict([v.split(':') for v in queue_mappings])
         return cls(queue_mappings, amqp, runners)
+
+
+# ################## #
+#   Consumer Logic   #
+# ################## #
 
 def set_status(status, build_request):
     """Update the job's status using the build_request object and global configuration."""
@@ -225,6 +233,10 @@ def on_open_channel(channel):
     global config
     # Declare the queue, bind the exchange and initialize the message handlers.
     declare(config.queue_mappings, config.runners, channel)
+
+# ######################### #
+#   Commandline Interface   #
+# ######################### #
 
 def main(argv=None):
     """Command line utility"""

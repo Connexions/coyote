@@ -1,69 +1,78 @@
-.. Michael Mulich, Copyright (c) 2012 Rice University
+Coyote
+======
 
-   This software is subject to the provisions of the GNU Lesser General
-   Public License Version 2.1 (LGPL).  See LICENSE.txt for details.
+Coyote is a generalized consumer implemenation that communicates with
+RabbitMQ to do various pieces of work that have been put there by the
+transformations services (`acmeio <https://github.com/Connexions/acmeio>`_)
+API and status system.
 
-rbit
-====
+Getting Started
+---------------
 
-rbit is pronounced 'R-bit', but with a slight hint that could roughly
-be pronouced 'Ri-bit'.
+This code uses ``setuptools`` to distribute itself. To install, use
+one of the following methods::
 
-rbit is a generalized consumer implemenation that communicates with
-RabbitMQ to do various pieces of work that have been put their by the
-PyBit status system.
+    $ python setup.py install
 
-rbit Logic Overview
--------------------
+Using ``pip`` you can install a released version, like so::
 
-The code is broken up into three parts. The first part is the
-client implementation, which can be trigger/controlled/daemonized on
-the command line interface. This piece of code is used by the
-system/user to execute the jobs in the queuing system.
+    $ pip install coyote
 
-The second part is the job logic (also known as the *runner*)--this
-differs based on what kind of work needs to be done--is linked to
-a callable that adheres to a specific parameter interface.
-This logic is made available through
-the configuration mapping of the queue name to the callable.
+Or, the development version by pointing pip at the checked out
+directory, like so::
 
-The third and final part of the code allows for the client user
-or system admin to set up the client using a configuration
-file. The configuration contains information about the PyBit
-Web application (This will be removed at some point, because we don't want
-the code to depend on the web front-end.), the message queue,
-and the queue to runner mappings as well as any runner specific settings.
+    $ pip install $CHECKOUT_LOCATION/rbit/
+
+
+Coyote Logic Overview
+---------------------
+
+There are three parts of to this application:
+
+1. The client implementation, which can be invoked and/or daemonized
+   via the commandline interface (CLI). This piece of code is used by the
+   system/user to read and execute configured job runners.
+
+2. The job logic (also known as the *runner*) is linked to
+   a callable that adheres to a specific parameter interface.
+   This logic is made available through the configuration mapping of
+   the queue name to the callable in the client component of this
+   application.
+
+3. A configuration file supplies the CLI utility with mappings to
+   runners and it also supplies settings/configuration to the runners
+   themeselves.
 
 Usage
 -----
 
-The general usage of the code from the command line interface goes as follows::
+The general usage of the code from the command line interface (CLI)
+goes as follows::
 
-    $ rbit rbit.ini
+    $ coyote plans.ini
 
-In this case we are telling the `rbit` command-line script to invoke
-the runners. The single file argument is the configuration file containing
-general information about the message queue as well as the configured
-runners.
+In this case we are telling the ``coyote`` CLI utility setup itself
+using the ``plans.ini`` file, which contains information about message
+queue connections and runner definitions.
 
-The ``rbit`` interface will happily run in foreground mode until you
+And the fun explanation of this... The ``coyote`` lays reads his/her
+plans and waits for a shipment from acme. Once the shipment is
+recieved ``coyote`` sets up the process and lays out the bird seed. The
+road runner quickly comes along and does it's duty. :)
+
+Also, the ``coyote`` interface will happily run in foreground mode until you
 decide to stop the process using ``Ctrl+c``.
 
 Configuration
 -------------
 
 The configuration is stored in an INI format for simplicity. There are
-**two required sections**: ``rbit`` and ``amqp``. They
+**two required sections**: ``coyote`` and ``amqp``. They
 contain settings for the client itself and the message queue,
 respectfully. All sections prefixed with `runner:` are
 considered job runner definitions. For example::
 
-    [rbit]
-    # The `name` corresponds with the `BuildBox` registration in PyBit's
-    #   web interface.
-    name = bob-villa
-    # These queue to runner mappings (<queue_name>:<runner_name>) propulate the
-    #   queues list to run through during runtime.
+    [coyote]
     queue-mappings =
         cnx_desktop_latex_pdf:legacy-print
         cnx_desktop_latex_offline:offlinezip    
@@ -85,13 +94,12 @@ spaces. A runner definition is an INI section prefixed with
 ``runner:``. For example::
 
     [runner:legacy-print]
-    runner = python!rbit.legacy:make_print
+    runner = python!geriatric_roadrunners:make_print
 
-Each job runner can have it's own set of settings. For a
+Each job runner can have it's own settings. For a
 section to be a valid runner it **must** define a value for the
 ``runner`` setting in the job runner's section. This value points to
-the callable that will handle the queued
-message.
+the callable that will handle the queued message.
 
 .. note:: The syntax for the runner value is,
    ``<processor-name>!<processor-specific-arguments>``. For example,
@@ -99,6 +107,10 @@ message.
 
 Runner Implementation
 ---------------------
+
+.. attention:: This runner interface will change in the near
+   future. The change will take place when PyBit is factored out
+   ``acmeio``.
 
 A job runner is a callable used to carry out the work.
 The runner is defined in configuration by the processor, which calls
@@ -111,7 +123,7 @@ example, you might configure a shell process like this::
 Or a Python runner like::
 
     [runner:legacy-print]
-    runner = python!rbitext.legacy:make_print
+    runner = python!geriatric_roadrunners:make_print
     python = /usr/local/bin/python2.4
     print-dir = Products.RhaptosPrint/Products/RhaptosPrint/printing
     output-dir = /var/pdfs
@@ -129,7 +141,7 @@ the ``my_worker.py`` module.
         try:
             print("Hello {0}!".format(settings['name']))
         except KeyError, err:
-            raise rbit.Failed("A 'name' was not configured.")
+            raise coyote.Failed("A 'name' was not configured.")
         print("Building {0}".format(build_request.get_package()))
         return []
 
@@ -139,84 +151,17 @@ And the INI formated configuration for this::
     runner = python!my_worker:hello
     name = World
 
-Note the use of ``rbit.Failed``. There are two types of exceptions
-used to report back a problem state: ``rbit.Failed`` and
-``rbit.Blocked``. As seen here, the Failed exception is used to report
+Note the use of ``coyote.Failed``. There are two types of exceptions
+used to report back a problem state: ``coyote.Failed`` and
+``coyote.Blocked``. As seen here, the Failed exception is used to report
 on a known error that can't be recovered from. The Blocked exception
 on the other hand is used to gracefully fail, but re-queue the job. It
 is typically used in situations where an external input isn't
 available yet.
 
-.. The status names are those defined in the PyBit web front-end. (How the
-   callback gets information about the names is to be determined
-   at implementation time.)
-
-Installation
-------------
-
-This code uses ``setuptools`` to distribute itself. To install, use of
-the following methods::
-
-    $ python setup.py install
-
-The following will to obtain released versions::
-
-    $ easy_install rbit
-
-Using `pip` you can install a released version, like so::
-
-    $ pip install rbit
-
-Or, the development version by pointing pip at the checked out
-directory, like so::
-
-    $ pip install $CHECKOUT_LOCATION/rbit/
-
-Reverse Engineering PyBit Client
---------------------------------
-
-This part of the readme contains information about 
-
-The implementation of PyBit client is specific to the Debian package
-build process. The code is setup to use a number of state handlers,
-which are triggered in (I think) a specific order. The handlers are
-small chuncks of logic that can be analyzed after run completion,
-which enables the client to update the status of the build in the
-PyBit web front-end.
-
-PyBit Statuses
-~~~~~~~~~~~~~~
-
-The implementation of statuses in PyBit seems incomplete at this
-time. The code that is used in PyBit Client has a static set of
-statuses to pull from. At the same time, the web front-end allows for
-the creation and deletion of statuses. This makes sense, but could
-result in odd behavior if the statuses are removed from the
-front-end. Removal would likely only disable the filtering of job
-results by status.
-
-PyBit Queue Design
-~~~~~~~~~~~~~~~~~~
-
-The queues used by PyBit are named queues with named routes.
-I believe the PyBit developers have taken a named queue approach
-for one of two reasons:
-
-1. Using named queues allows the producer to create queues where it
-   knowns data will persist even if no consumer is listening. 
-2. They may have started with named queues and never got the chance to
-   remove the implementation.
-
-I think the best approach in this situation would be to setup a named
-queue from the PyBit web front-end that recieves all messages. Then
-have a default listener that watches for new build-clients. Once it
-sees a new build client it cycles through the queue, republishing
-queued items that have been put in the default queue.
-
-This approach could be taken a step further to stop and start workers
-based on work available and the usage of slave boxes.
-
 License
 -------
 
-This software is subject to the provisions of the GNU Affero General Public License Version 3.0 (AGPL). See license.txt for details. Copyright (c) 2012 Rice University
+This software is subject to the provisions of the GNU Affero General
+Public License Version 3.0 (AGPL). See license.txt for details.
+Copyright (c) 2013 Rice University

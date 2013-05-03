@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
+# ###
+# Copyright (c) 2013, Rice University
+# This software is subject to the provisions of the GNU Affero General
+# Public License version 3 (AGPLv3).
+# See LICENCE.txt for details.
+# ###
 """\
 A consumer/client implemenation that works with the PyBit system to track
 the status of running jobs.
-"""
 
-Author: Michael Mulich
-Copyright (c) 2012-2013 Rice University
-
-Parts of the client code are derived from the PyBit client implementation at
-https://github.com/nicholasdavidson/pybit licensed under GPL2.1.
-
-This software is subject to the provisions of the GNU AFFERO GENERAL PUBLIC LICENSE Version 3.0 (AGPL).  
-See LICENSE.txt for details.
 """
 import logging
 import argparse

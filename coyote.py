@@ -10,8 +10,9 @@ A consumer/client implemenation that works with the PyBit system to track
 the status of running jobs.
 
 """
-import logging
 import argparse
+import logging
+import json
 import traceback
 from importlib import import_module
 from logging.config import fileConfig as load_logging_configuration
@@ -24,6 +25,7 @@ import pybit
 
 
 CONFIG__HANDLER_PREFIX = 'runner:'
+STATUS_QUEUE = 'acme-status'
 logger = logging.getLogger('coyote')
 # Global configuration object
 config = None
@@ -145,17 +147,37 @@ def set_status(status, build_request):
     and global configuration.
 
     """
+    # Information for setting up a connection.
     global config
-    payload = {'status': status}
-    job_status_url = "http://{0}/job/{1}".format(build_request.web_host,
-                                                 build_request.get_job_id())
-    # FIXME We need a better way to authenticate... api keys maybe?
-    #       We don't really want to be sending status updates via
-    #       http anyhow, so this may not be important in the future.
-    username = 'admin'
-    password = 'pass'
-    auth = requests.auth.HTTPBasicAuth(username, password)
-    requests.put(job_status_url, payload, auth=auth)
+    host = config.amqp.get('host', 'localhost')
+    port = int(config.amqp.get('port', 5672))
+    user = config.amqp.get('user')
+    password = config.amqp.get('password')
+    virtual_host = config.amqp.get('virtual_host')
+
+    # Data to be sent.
+    message = {'job': build_request.get_job_id(), 'status': status,
+               'message': ''}
+    message = json.dumps(message)
+
+    # Message queue connection setup.
+    credentials = pika.PlainCredentials(user, password)
+    parameters = pika.ConnectionParameters(host, port, virtual_host,
+                                           credentials)
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+    channel.queue_declare(queue=STATUS_QUEUE, durable=True)
+
+    # ??? Does the delivery_mode really need set if the queue has been
+    #     declared as durable?
+    channel.basic_publish(
+        exchange='',
+        routing_key=STATUS_QUEUE,
+        body=message,
+        # delivery_mode 2 makes the message persist.
+        properties=pika.BasicProperties(delivery_mode=2),
+        )
+    connection.close()
 
 
 def republish(build_request, queue, channel):

@@ -252,7 +252,7 @@ def on_open_channel(channel):
 
 def main(argv=None):
     """Command line utility"""
-    parser = argparse.ArgumentParser(description="PyBit builder for rhaptos")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('config', type=argparse.FileType('r'),
                         help="INI configuration file")
     args = parser.parse_args(argv)

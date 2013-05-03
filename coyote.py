@@ -47,6 +47,7 @@ class Failed(Exception):
 
     """
 
+
 # ################# #
 #   Configuration   #
 # ################# #
@@ -140,7 +141,10 @@ class Config(object):
 # ################## #
 
 def set_status(status, build_request):
-    """Update the job's status using the build_request object and global configuration."""
+    """Update the job's status using the build_request object
+    and global configuration.
+
+    """
     global config
     payload = {'status': status}
     job_status_url = "http://{0}/job/{1}".format(build_request.web_host,
@@ -153,10 +157,12 @@ def set_status(status, build_request):
     auth = requests.auth.HTTPBasicAuth(username, password)
     requests.put(job_status_url, payload, auth=auth)
 
+
 def republish(build_request, queue, channel):
     """Republish or push the build request back to the originating queue."""
     body = jsonpickle.encode(build_request)
     channel.basic_publish(exchange='', routing_key=queue, body=body)
+
 
 def get_message_handler(settings, queue):
     """This looks up the runner from the settings and wraps it to make it
@@ -210,6 +216,7 @@ def get_message_handler(settings, queue):
 
     return message_handler
 
+
 def declare(queue_mappings, runner_settings, channel):
     """Declare the queue(s) and bind the pybit exchange. Also bind
     the runners to the queue declaration.
@@ -218,21 +225,26 @@ def declare(queue_mappings, runner_settings, channel):
     for queue, runner_name in queue_mappings.items():
         settings = runner_settings[runner_name]
         message_handler = get_message_handler(settings, queue)
+
         def on_queue_declared(frame):
             channel.basic_consume(message_handler, queue=queue)
+
         channel.queue_declare(queue=queue, durable=True, exclusive=False,
                               auto_delete=False, callback=on_queue_declared)
+
 
 def on_connected(connection):
     """Called after an amqp connection has been established."""
     # Open a new channel.
     connection.channel(on_open_channel)
 
+
 def on_open_channel(channel):
     """Called when a new channel has been established."""
     global config
     # Declare the queue, bind the exchange and initialize the message handlers.
     declare(config.queue_mappings, config.runners, channel)
+
 
 # ######################### #
 #   Commandline Interface   #

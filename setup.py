@@ -19,7 +19,7 @@ test_requirements = [
     ]
 
 setup(
-    name='rbit',
+    name='coyote',
     version='0.1',
     author="Connexions/Rhaptos Team",
     author_email="info@cnx.org",

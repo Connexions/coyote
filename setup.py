@@ -4,6 +4,7 @@ from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = os.path.join(here, 'README.rst')
+CHANGES = os.path.join(here, 'CHANGES.rst')
 
 install_requirements = [
     'pika',
@@ -23,7 +24,7 @@ setup(
     author="Connexions/Rhaptos Team",
     author_email="info@cnx.org",
     description='',
-    long_description=open(README).read(),
+    long_description='\n'.join([open(README).read(), open(CHANGES).read()]),
     url='https://github.com/connexions/coyote',
     license='AGPL',  # See also LICENSE.txt
     packages=find_packages(),

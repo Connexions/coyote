@@ -29,6 +29,7 @@ STATUS_QUEUE = 'acme-status'
 logger = logging.getLogger('coyote')
 # Global configuration object
 config = None
+channel = None
 
 
 # ##################### #
@@ -186,7 +187,7 @@ def republish(build_request, queue, channel):
     channel.basic_publish(exchange='', routing_key=queue, body=body)
 
 
-def get_message_handler(settings, queue):
+def get_on_queue_declared_callback(settings, queue):
     """This looks up the runner from the settings and wraps it to make it
     a pika compatible message handler. We pass in the queue, because it is
     required for republication of build requests and it cannot be reliably
@@ -236,23 +237,9 @@ def get_message_handler(settings, queue):
             human_readable_artifacts = ', '.join([quote(a) for a in artifacts])
             logger.debug("Artifacts: {0}".format(human_readable_artifacts))
 
-    return message_handler
-
-
-def declare(queue_mappings, runner_settings, channel):
-    """Declare the queue(s) and bind the pybit exchange. Also bind
-    the runners to the queue declaration.
-
-    """
-    for queue, runner_name in queue_mappings.items():
-        settings = runner_settings[runner_name]
-        message_handler = get_message_handler(settings, queue)
-
-        def on_queue_declared(frame):
-            channel.basic_consume(message_handler, queue=queue)
-
-        channel.queue_declare(queue=queue, durable=True, exclusive=False,
-                              auto_delete=False, callback=on_queue_declared)
+    global channel
+    import ipdb; ipdb.set_trace()
+    channel.basic_consume(message_handler, queue=queue)
 
 
 def on_connected(connection):
@@ -261,11 +248,17 @@ def on_connected(connection):
     connection.channel(on_open_channel)
 
 
-def on_open_channel(channel):
+def on_open_channel(new_channel):
     """Called when a new channel has been established."""
     global config
+    global channel
+    channel = new_channel
     # Declare the queue, bind the exchange and initialize the message handlers.
-    declare(config.queue_mappings, config.runners, channel)
+    for queue, runner_name in config.queue_mappings.items():
+        settings = config.runners[runner_name]
+        on_queue_declared = get_on_queue_declared_callback(settings, queue)
+        channel.queue_declare(queue=queue, durable=True, exclusive=False,
+                              auto_delete=False, callback=on_queue_declared)
 
 
 # ######################### #

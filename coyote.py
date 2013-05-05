@@ -238,7 +238,6 @@ def get_on_queue_declared_callback(settings, queue):
             logger.debug("Artifacts: {0}".format(human_readable_artifacts))
 
     global channel
-    import ipdb; ipdb.set_trace()
     channel.basic_consume(message_handler, queue=queue)
 
 

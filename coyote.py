@@ -263,6 +263,21 @@ def on_open_channel(new_channel):
                               auto_delete=False, callback=on_queue_declared)
 
 
+def make_connection(config, on_connect_callback=on_connected):
+    """Creates a connection and sets up the callback for that connection."""
+    host = config.amqp.get('host', 'localhost')
+    port = int(config.amqp.get('port', 5672))
+    user = config.amqp.get('user')
+    password = config.amqp.get('password')
+    virtual_host = config.amqp.get('virtual_host')
+
+    credentials = pika.PlainCredentials(user, password)
+    parameters = pika.ConnectionParameters(host, port, virtual_host,
+                                           credentials)
+    connection = pika.SelectConnection(parameters, on_connect_callback)
+    return connection
+
+
 # ######################### #
 #   Commandline Interface   #
 # ######################### #
@@ -281,16 +296,7 @@ def main(argv=None):
     global config
     config = Config.from_file(args.config)
 
-    host = config.amqp.get('host', 'localhost')
-    port = int(config.amqp.get('port', 5672))
-    user = config.amqp.get('user')
-    password = config.amqp.get('password')
-    virtual_host = config.amqp.get('virtual_host')
-
-    credentials = pika.PlainCredentials(user, password)
-    parameters = pika.ConnectionParameters(host, port, virtual_host,
-                                           credentials)
-    connection = pika.SelectConnection(parameters, on_connected)
+    connection = make_connection(config)
 
     try:
         # Loop so we can communicate with RabbitMQ

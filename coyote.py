@@ -230,6 +230,9 @@ def get_on_queue_declared_callback(settings, queue):
             acknowledge()
         except Exception as exc:
             logger.error(exc, exc_info=1)
+            set_status('Failed', build_request)
+            republish(build_request, queue, channel)
+            acknowledge()
 
         # Log the artifacts...
         if artifacts:

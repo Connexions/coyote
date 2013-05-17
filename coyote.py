@@ -187,7 +187,7 @@ def republish(build_request, queue, channel):
     channel.basic_publish(exchange='', routing_key=queue, body=body)
 
 
-def get_on_queue_declared_callback(settings, queue):
+def get_consumer_callback(settings, queue):
     """This looks up the runner from the settings and wraps it to make it
     a pika compatible message handler. We pass in the queue, because it is
     required for republication of build requests and it cannot be reliably
@@ -240,8 +240,7 @@ def get_on_queue_declared_callback(settings, queue):
             human_readable_artifacts = ', '.join([quote(a) for a in artifacts])
             logger.debug("Artifacts: {0}".format(human_readable_artifacts))
 
-    global channel
-    channel.basic_consume(message_handler, queue=queue)
+    return message_handler
 
 
 def on_connected(connection):
@@ -258,9 +257,10 @@ def on_open_channel(new_channel):
     # Declare the queue, bind the exchange and initialize the message handlers.
     for queue, runner_name in config.queue_mappings.items():
         settings = config.runners[runner_name]
-        on_queue_declared = get_on_queue_declared_callback(settings, queue)
-        channel.queue_declare(queue=queue, durable=True, exclusive=False,
-                              auto_delete=False, callback=on_queue_declared)
+        message_handler = get_consumer_callback(settings, queue)
+        channel.queue_declare(queue=queue, durable=True, exclusive=False, 
+                              auto_delete=False, callback=None)
+        channel.basic_consume(message_handler, queue=queue)
 
 
 def make_connection(config, on_connect_callback=on_connected):

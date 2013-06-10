@@ -252,7 +252,6 @@ def on_connected(connection):
 def on_open_channel(new_channel):
     """Called when a new channel has been established."""
     global config
-    global channel
     channel = new_channel
     # Declare the queue, bind the exchange and initialize the message handlers.
     for queue, runner_name in config.queue_mappings.items():

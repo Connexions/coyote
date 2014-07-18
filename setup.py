@@ -7,6 +7,8 @@ README = os.path.join(here, 'README.rst')
 CHANGES = os.path.join(here, 'CHANGES.rst')
 
 install_requirements = [
+    'pyramid',
+    'waitress',
     'pika',
     'requests',
     # PyBit and dependencies
@@ -14,8 +16,12 @@ install_requirements = [
     'psycopg2',
     'amqplib',
     'jsonpickle',
+    'bottle',    
     ]
 test_requirements = [
+    'mock',
+    'WebTest',
+    'WSGIProxy2',
     ]
 
 setup(
@@ -30,11 +36,10 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=install_requirements,
-    extras_require={
-        'tests': test_requirements,
-        },
+    tests_require=test_requirements,
     entry_points = """\
     [console_scripts]
     coyote = coyote:main
     """,
+    test_suite = 'coyote.tests'
     )
